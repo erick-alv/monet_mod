@@ -107,3 +107,4 @@ venv.bak/
 #own
 *.npy
 *.png
+*.idea
