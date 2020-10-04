@@ -59,26 +59,30 @@ def make_sprites(n=50000, height=64, width=64):
             progress_bar(i, n)
     images = np.clip(images, 0.0, 1.0)
 
-    return {'x_train': images[:4 * n // 5],
+    '''return {'x_train': images[:4 * n // 5],
             'count_train': counts[:4 * n // 5],
             'x_test': images[4 * n // 5:],
-            'count_test': counts[4 * n // 5:]}
+            'count_test': counts[4 * n // 5:]}'''
+    return images
 
 
 class Sprites(Dataset):
-    def __init__(self, directory, n=50000, canvas_size=64,
+    def __init__(self, directory, n=25000,#50000,
+                 canvas_size=64,
                  train=True, transform=None):
-        np_file = 'sprites_{}_{}.npz'.format(n, canvas_size)
+        np_file = 'sprites_{}_{}.npy'.format(n, canvas_size)
         full_path = os.path.join(directory, np_file)
         if not os.path.isfile(full_path):
             gen_data = make_sprites(n, canvas_size, canvas_size)
-            np.savez(np_file, **gen_data)
+            #a = **gen_data
+            np.save(full_path, gen_data)
+            #np.savez(np_file, **gen_data)
 
         data = np.load(full_path)
 
-        self.transform = transform
-        self.images = data['x_train'] if train else data['x_test']
-        self.counts = data['count_train'] if train else data['count_test']
+        #self.transform = transform
+        #self.images = data['x_train'] if train else data['x_test']
+        #self.counts = data['count_train'] if train else data['count_test']
 
     def __len__(self):
         return self.images.shape[0]

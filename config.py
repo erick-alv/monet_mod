@@ -24,12 +24,13 @@ config_options = [
 MonetConfig = namedtuple('MonetConfig', config_options)
 
 sprite_config = MonetConfig(vis_every=50,
-                            batch_size=64,
+                            batch_size=32,#64,
                             num_epochs=20,
                             load_parameters=True,
                             checkpoint_file='./checkpoints/sprites.ckpt',
                             data_dir='./data/',
-                            parallel=True,
+                            #parallel=True,
+                            parallel=False,
                             num_slots=4,
                             num_blocks=5,
                             channel_base=64,

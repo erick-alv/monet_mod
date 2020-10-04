@@ -7,21 +7,22 @@ import torchvision
 import torchvision.transforms as transforms
 import torch.optim as optim
 import numpy as np
-import visdom
+#import visdom
 
 import os
 
 import model
 import datasets
 import config
+from PIL import Image
 
-vis = visdom.Visdom()
+#vis = visdom.Visdom()
 
 
 def numpify(tensor):
     return tensor.cpu().detach().numpy()
 
-def visualize_masks(imgs, masks, recons):
+def visualize_masks(epoch, imgs, masks, recons):
     # print('recons min/max', recons[:, 0].min().item(), recons[:, 0].max().item())
     # print('recons1 min/max', recons[:, 1].min().item(), recons[:, 1].max().item())
     # print('recons2 min/max', recons[:, 2].min().item(), recons[:, 2].max().item())
@@ -36,10 +37,20 @@ def visualize_masks(imgs, masks, recons):
             for x in range(imgs.shape[3]):
                 seg_maps[i, :, y, x] = colors[masks[i, y, x]]
 
-    seg_maps /= 255.0
-    vis.images(np.concatenate((imgs, seg_maps, recons), 0), nrow=imgs.shape[0])
+    imgs *= 255.0
+    recons *= 255.0
 
-def run_training(monet, conf, trainloader):
+    imgs = np.transpose(imgs, (0, 2, 3, 1))
+    imgs = np.concatenate(imgs, axis=1)
+    seg_maps = np.transpose(seg_maps, (0, 2, 3, 1))
+    seg_maps = np.concatenate(seg_maps, axis=1)
+    recons = np.transpose(recons, (0, 2, 3, 1))
+    recons = np.concatenate(recons, axis=1)
+    all_im_array = np.concatenate((imgs, seg_maps, recons), axis=0)
+    all_im = Image.fromarray(all_im_array.astype(np.uint8))
+    all_im.save('./results/recons_{}.png'.format(epoch))
+
+def run_training(monet, conf, train_file):
     if conf.load_parameters and os.path.isfile(conf.checkpoint_file):
         monet.load_state_dict(torch.load(conf.checkpoint_file))
         print('Restored parameters from', conf.checkpoint_file)
@@ -52,43 +63,61 @@ def run_training(monet, conf, trainloader):
     optimizer = optim.RMSprop(monet.parameters(), lr=1e-4)
 
     for epoch in range(conf.num_epochs):
-        running_loss = 0.0
-        for i, data in enumerate(trainloader, 0):
-            images, counts = data
-            images = images.cuda()
-            optimizer.zero_grad()
-            output = monet(images)
-            loss = torch.mean(output['loss'])
-            loss.backward()
-            optimizer.step()
+        imgs, masks, recons = train(epoch=epoch, model=monet, optimizer=optimizer, device=None, log_interval=200,
+              train_file=train_file, batch_size=conf.batch_size, beta=None)
+        visualize_masks(epoch, imgs, masks, recons)
 
-            running_loss += loss.item()
-
-            if i % conf.vis_every == conf.vis_every-1:
-                print('[%d, %5d] loss: %.3f' %
-                      (epoch + 1, i + 1, running_loss / conf.vis_every))
-                running_loss = 0.0
-                visualize_masks(numpify(images[:8]),
-                                numpify(output['masks'][:8]),
-                                numpify(output['reconstructions'][:8]))
-
-        torch.save(monet.state_dict(), conf.checkpoint_file)
-
+    torch.save(monet.state_dict(), conf.checkpoint_file)
     print('training done')
+
+
+def train(epoch, model, optimizer, device, log_interval, train_file, batch_size, beta):
+    model.train()
+    train_loss = 0
+    data_set = np.load(train_file)
+    data_set = data_set
+
+    data_size = len(data_set)
+    data_set = np.split(data_set, data_size / batch_size)
+
+    for batch_idx, data in enumerate(data_set):
+        #data = torch.from_numpy(data).float().to(device)
+        data = torch.from_numpy(data).float().cuda()
+        #data /= 255
+        data = data.permute([0, 3, 1, 2])
+        optimizer.zero_grad()
+        #recon_batch, mu, logvar = model(data)
+        #loss = loss_function(recon_batch, data, mu, logvar, beta)
+        output = model(data)
+        loss = torch.mean(output['loss'])
+        loss.backward()
+        optimizer.step()
+        train_loss += loss.item()
+
+        if batch_idx % log_interval == 0:
+            print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
+                epoch, (batch_idx + 1) * len(data), data_size,
+                       100. * (batch_idx + 1) / len(data_set),
+                       loss.item() / len(data)))
+            print('Loss: ', loss.item() / len(data))
+
+    print('====> Epoch: {} Average loss: {:.4f}'.format(
+        epoch, train_loss / data_size))
+    return numpify(data),numpify(output['masks']),numpify(output['reconstructions'])
 
 def sprite_experiment():
     conf = config.sprite_config
-    transform = transforms.Compose([transforms.ToTensor(),
-                                    transforms.Lambda(lambda x: x.float()),
-                                    ])
-    trainset = datasets.Sprites(conf.data_dir, train=True, transform=transform)
-    trainloader = torch.utils.data.DataLoader(trainset,
-                                              batch_size=conf.batch_size,
-                                              shuffle=True, num_workers=2)
-    monet = model.Monet(conf, 64, 64).cuda()
+    #transform = transforms.Compose([transforms.ToTensor(),
+    #                                transforms.Lambda(lambda x: x.float()),
+    #                                ])
+    #trainset = datasets.Sprites(conf.data_dir, train=True, transform=transform)
+    #trainloader = torch.utils.data.DataLoader(trainset,
+    #                                          batch_size=conf.batch_size,
+    #                                          shuffle=True, num_workers=2)
+    monet = model.Monet(conf, device=None, latent_size=16, height=64, width=64).cuda()
     if conf.parallel:
         monet = nn.DataParallel(monet)
-    run_training(monet, conf, trainloader)
+    run_training(monet, conf, train_file='./data/sprites_25000_64.npy')
 
 def clevr_experiment():
     conf = config.clevr_config
