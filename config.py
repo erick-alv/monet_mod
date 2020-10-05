@@ -19,6 +19,8 @@ config_options = [
     'channel_base',  # Number of channels used for the first U-Net conv layer
     'bg_sigma',  # Sigma of the decoder distributions for the first slot
     'fg_sigma',  # Sigma of the decoder distributions for all other slots
+    'beta',
+    'gamma',
 ]
 
 MonetConfig = namedtuple('MonetConfig', config_options)
@@ -36,6 +38,8 @@ sprite_config = MonetConfig(vis_every=50,
                             channel_base=64,
                             bg_sigma=0.09,
                             fg_sigma=0.11,
+                            beta = 0.5,
+                            gamma = 0.25,
                            )
 
 clevr_config = MonetConfig(vis_every=50,
@@ -50,6 +54,8 @@ clevr_config = MonetConfig(vis_every=50,
                            channel_base=64,
                            bg_sigma=0.09,
                            fg_sigma=0.11,
+                            beta = 0.5,
+                            gamma = 0.25,
                           )
 
 

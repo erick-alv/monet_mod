@@ -16,12 +16,6 @@ import datasets
 import config
 from PIL import Image
 
-#vis = visdom.Visdom()
-
-
-def numpify(tensor):
-    return tensor.cpu().detach().numpy()
-
 def visualize_masks(epoch, imgs, masks, recons):
     # print('recons min/max', recons[:, 0].min().item(), recons[:, 0].max().item())
     # print('recons1 min/max', recons[:, 1].min().item(), recons[:, 1].max().item())
@@ -50,7 +44,7 @@ def visualize_masks(epoch, imgs, masks, recons):
     all_im = Image.fromarray(all_im_array.astype(np.uint8))
     all_im.save('./results/recons_{}.png'.format(epoch))
 
-def run_training(monet, conf, train_file):
+def run_training(monet, conf, train_file, device):
     if conf.load_parameters and os.path.isfile(conf.checkpoint_file):
         monet.load_state_dict(torch.load(conf.checkpoint_file))
         print('Restored parameters from', conf.checkpoint_file)
@@ -63,47 +57,14 @@ def run_training(monet, conf, train_file):
     optimizer = optim.RMSprop(monet.parameters(), lr=1e-4)
 
     for epoch in range(conf.num_epochs):
-        imgs, masks, recons = train(epoch=epoch, model=monet, optimizer=optimizer, device=None, log_interval=200,
-              train_file=train_file, batch_size=conf.batch_size, beta=None)
+        imgs, masks, recons = model.train(epoch=epoch, model=monet, optimizer=optimizer, device=device, log_interval=200,
+                                          train_file=train_file, batch_size=conf.batch_size, beta=conf.beta,
+                                          gamma=conf.gamma, bg_sigma=conf.bg_sigma, fg_sigma=conf.fg_sigma)
         visualize_masks(epoch, imgs, masks, recons)
 
     torch.save(monet.state_dict(), conf.checkpoint_file)
     print('training done')
 
-
-def train(epoch, model, optimizer, device, log_interval, train_file, batch_size, beta):
-    model.train()
-    train_loss = 0
-    data_set = np.load(train_file)
-    data_set = data_set
-
-    data_size = len(data_set)
-    data_set = np.split(data_set, data_size / batch_size)
-
-    for batch_idx, data in enumerate(data_set):
-        #data = torch.from_numpy(data).float().to(device)
-        data = torch.from_numpy(data).float().cuda()
-        #data /= 255
-        data = data.permute([0, 3, 1, 2])
-        optimizer.zero_grad()
-        #recon_batch, mu, logvar = model(data)
-        #loss = loss_function(recon_batch, data, mu, logvar, beta)
-        output = model(data)
-        loss = torch.mean(output['loss'])
-        loss.backward()
-        optimizer.step()
-        train_loss += loss.item()
-
-        if batch_idx % log_interval == 0:
-            print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-                epoch, (batch_idx + 1) * len(data), data_size,
-                       100. * (batch_idx + 1) / len(data_set),
-                       loss.item() / len(data)))
-            print('Loss: ', loss.item() / len(data))
-
-    print('====> Epoch: {} Average loss: {:.4f}'.format(
-        epoch, train_loss / data_size))
-    return numpify(data),numpify(output['masks']),numpify(output['reconstructions'])
 
 def sprite_experiment():
     conf = config.sprite_config
@@ -117,7 +78,8 @@ def sprite_experiment():
     monet = model.Monet(conf, device=None, latent_size=16, height=64, width=64).cuda()
     if conf.parallel:
         monet = nn.DataParallel(monet)
-    run_training(monet, conf, train_file='./data/sprites_25000_64.npy')
+    device = torch.device("cuda")
+    run_training(monet, conf, train_file='./data/sprites_25000_64.npy', device=device)
 
 def clevr_experiment():
     conf = config.clevr_config

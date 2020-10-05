@@ -108,3 +108,4 @@ venv.bak/
 *.npy
 *.png
 *.idea
+*.ckpt
