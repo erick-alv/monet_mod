@@ -301,14 +301,13 @@ def train(epoch, model, optimizer, device, log_interval, train_file, batch_size,
     model.train()
     train_loss = 0
     data_set = np.load(train_file)
-    data_set = data_set[:10000]
 
     data_size = len(data_set)
     data_set = np.split(data_set, data_size / batch_size)
 
     for batch_idx, data in enumerate(data_set):
         data = torch.from_numpy(data).float().to(device)
-        #data /= 255#todo this must be used once trained with own images
+        data /= 255#todo this must be used once trained with own images
         data = data.permute([0, 3, 1, 2])
         optimizer.zero_grad()
         mu_s, logvar_s, masks, full_reconstruction, x_recon_s, mask_pred_s = model(data)
